@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>환율 계산기</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #ffffff;
+      color: #37352f;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .widget {
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #37352f;
+    }
+
+    .refresh-btn {
+      background: none;
+      border: 1px solid #e3e2e0;
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 12px;
+      color: #6b7280;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.15s;
+    }
+
+    .refresh-btn:hover { background: #f7f6f3; }
+    .refresh-btn.loading { opacity: 0.5; pointer-events: none; }
+
+    .update-time {
+      font-size: 11px;
+      color: #9b9a97;
+      text-align: right;
+      margin-bottom: 16px;
+    }
+
+    .input-section {
+      background: #f7f6f3;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .amount-input {
+      flex: 1;
+      border: 1px solid #e3e2e0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 22px;
+      font-weight: 600;
+      background: #fff;
+      color: #37352f;
+      outline: none;
+      transition: border-color 0.15s;
+      width: 0;
+      text-align: right;
+    }
+
+    .amount-input:focus { border-color: #2eaadc; }
+
+    .currency-select {
+      border: 1px solid #e3e2e0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 15px;
+      font-weight: 600;
+      background: #fff;
+      color: #37352f;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 28px;
+      transition: border-color 0.15s;
+    }
+
+    .currency-select:focus { border-color: #2eaadc; }
+
+    .results {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .result-card {
+      background: #f7f6f3;
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background 0.15s;
+    }
+
+    .result-card:hover { background: #eeece8; cursor: pointer; }
+    .result-card.base { background: #eef6fb; border: 1px solid #b8dff0; }
+
+    .currency-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .flag {
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .currency-label {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .currency-code {
+      font-size: 14px;
+      font-weight: 600;
+      color: #37352f;
+    }
+
+    .currency-name {
+      font-size: 11px;
+      color: #9b9a97;
+    }
+
+    .amount-display {
+      text-align: right;
+    }
+
+    .converted-amount {
+      font-size: 20px;
+      font-weight: 700;
+      color: #37352f;
+    }
+
+    .rate-info {
+      font-size: 11px;
+      color: #9b9a97;
+      margin-top: 2px;
+    }
+
+    .error-msg {
+      text-align: center;
+      color: #eb5757;
+      font-size: 13px;
+      padding: 20px;
+    }
+
+    .skeleton {
+      background: linear-gradient(90deg, #e3e2e0 25%, #f0efec 50%, #e3e2e0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s infinite;
+      border-radius: 6px;
+      height: 20px;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .spin { animation: spin 0.8s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="widget">
+    <div class="header">
+      <span class="title">💱 환율 계산기</span>
+      <button class="refresh-btn" id="refreshBtn" onclick="loadRates()">
+        <span id="refreshIcon">↻</span> 새로고침
+      </button>
+    </div>
+    <div class="update-time" id="updateTime">불러오는 중...</div>
+
+    <div class="input-section">
+      <div class="input-row">
+        <input
+          class="amount-input"
+          type="text"
+          id="amountInput"
+          value="1"
+          inputmode="decimal"
+          placeholder="금액 입력"
+        />
+        <select class="currency-select" id="baseCurrency">
+          <option value="KRW">KRW</option>
+          <option value="USD" selected>USD</option>
+          <option value="JPY">JPY</option>
+          <option value="EUR">EUR</option>
+          <option value="THB">THB</option>
+          <option value="VND">VND</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="results" id="results">
+      <!-- cards rendered by JS -->
+    </div>
+  </div>
+
+  <script>
+    const CURRENCIES = [
+      { code: "KRW", name: "한국 원화",        flag: "🇰🇷" },
+      { code: "USD", name: "미국 달러",         flag: "🇺🇸" },
+      { code: "JPY", name: "일본 엔화",         flag: "🇯🇵" },
+      { code: "EUR", name: "유럽 유로",         flag: "🇪🇺" },
+      { code: "THB", name: "태국 바트",         flag: "🇹🇭" },
+      { code: "VND", name: "베트남 동",         flag: "🇻🇳" },
+    ];
+
+    // rates relative to USD
+    let rates = null;
+    let lastUpdated = null;
+
+    async function loadRates() {
+      const btn = document.getElementById("refreshBtn");
+      const icon = document.getElementById("refreshIcon");
+      btn.classList.add("loading");
+      icon.classList.add("spin");
+
+      try {
+        // Free API — no key required
+        const res = await fetch("https://api.exchangerate-api.com/v4/latest/USD");
+        if (!res.ok) throw new Error("API 오류");
+        const data = await res.json();
+        rates = data.rates;
+        rates["USD"] = 1;
+        lastUpdated = new Date();
+        document.getElementById("updateTime").textContent =
+          "업데이트: " + lastUpdated.toLocaleString("ko-KR");
+        updateResults();
+      } catch (e) {
+        document.getElementById("results").innerHTML =
+          `<div class="error-msg">환율 데이터를 불러오지 못했습니다.<br/>네트워크 연결을 확인해 주세요.</div>`;
+        document.getElementById("updateTime").textContent = "데이터 없음";
+      } finally {
+        btn.classList.remove("loading");
+        icon.classList.remove("spin");
+      }
+    }
+
+    function formatAmount(amount, code) {
+      if (amount === null || isNaN(amount)) return "—";
+      const noDecimalCodes = ["KRW", "JPY", "VND"];
+      const opts = {
+        minimumFractionDigits: noDecimalCodes.includes(code) ? 0 : 2,
+        maximumFractionDigits: noDecimalCodes.includes(code) ? 0 : 2,
+      };
+      return new Intl.NumberFormat("ko-KR", opts).format(amount);
+    }
+
+    const NO_DECIMAL = ["KRW", "JPY", "VND"];
+
+    function parseInput(str) {
+      return parseFloat(str.replace(/,/g, "")) || 0;
+    }
+
+    function formatInput(str, base) {
+      // strip everything except digits and dot
+      let clean = str.replace(/[^\d.]/g, "");
+      // only one dot allowed
+      const parts = clean.split(".");
+      if (parts.length > 2) clean = parts[0] + "." + parts.slice(1).join("");
+      // no decimals for KRW/JPY/VND
+      if (NO_DECIMAL.includes(base)) clean = clean.split(".")[0];
+
+      const [intPart, decPart] = clean.split(".");
+      const formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      return decPart !== undefined ? formatted + "." + decPart : formatted;
+    }
+
+    function updateResults() {
+      const amountInput = document.getElementById("amountInput");
+      const base = document.getElementById("baseCurrency").value;
+      const amount = parseInput(amountInput.value);
+      const container = document.getElementById("results");
+
+      if (!rates) {
+        container.innerHTML = `<div class="error-msg">데이터 로딩 중...</div>`;
+        return;
+      }
+
+      if (amount <= 0 && amountInput.value !== "" && amountInput.value !== "0") {
+        container.innerHTML = `<div class="error-msg">올바른 금액을 입력해 주세요.</div>`;
+        return;
+      }
+
+      const baseRate = rates[base];
+
+      const krw = CURRENCIES.find(c => c.code === "KRW");
+      const converted = (amount / baseRate) * rates["KRW"];
+      const unitRate = (1 / baseRate) * rates["KRW"];
+      const isBase = base === "KRW";
+
+      container.innerHTML = `
+        <div class="result-card${isBase ? " base" : ""}">
+          <div class="currency-info">
+            <span class="flag">${krw.flag}</span>
+            <div class="currency-label">
+              <span class="currency-code">${krw.code}</span>
+              <span class="currency-name">${krw.name}</span>
+            </div>
+          </div>
+          <div class="amount-display">
+            <div class="converted-amount">${formatAmount(converted, "KRW")}</div>
+            ${!isBase
+              ? `<div class="rate-info">1 ${base} = ${formatAmount(unitRate, "KRW")} KRW</div>`
+              : `<div class="rate-info">기준 통화</div>`
+            }
+          </div>
+        </div>
+      `;
+    }
+
+    function setBase(code, amount) {
+      const rounded = parseFloat(amount.toFixed(NO_DECIMAL.includes(code) ? 0 : 2));
+      document.getElementById("baseCurrency").value = code;
+      document.getElementById("amountInput").value =
+        formatInput(String(rounded), code);
+      updateResults();
+    }
+
+    document.getElementById("amountInput").addEventListener("input", function (e) {
+      const base = document.getElementById("baseCurrency").value;
+      const cursor = this.selectionStart;
+      const prevLen = this.value.length;
+      this.value = formatInput(this.value, base);
+      // keep cursor roughly in place after comma insertion
+      const diff = this.value.length - prevLen;
+      this.setSelectionRange(cursor + diff, cursor + diff);
+      updateResults();
+    });
+
+    document.getElementById("baseCurrency").addEventListener("change", function () {
+      const input = document.getElementById("amountInput");
+      input.value = formatInput(input.value, this.value);
+      updateResults();
+    });
+
+    // initial load
+    loadRates();
+
+    // auto-refresh every 10 minutes
+    setInterval(loadRates, 10 * 60 * 1000);
+  </script>
+</body>
+</html>
